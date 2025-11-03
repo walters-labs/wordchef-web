@@ -3,6 +3,7 @@ require_once('utils.php');
 require_once('response.php');
 
 $conn = db_connect();
+validate_api_key($conn);
 
 // Parse input: either GET or POST
 $input = $_GET['words'] ?? ($_POST['words'] ?? '');

@@ -2,6 +2,9 @@
 require_once('utils.php');
 require_once('response.php');
 
+$conn = db_connect();
+validate_api_key($conn);
+
 // Parse vector (as comma-separated values) and label
 $vector_str = $_POST['vector'] ?? ($_GET['vector'] ?? '');
 $label = $_POST['label'] ?? ($_GET['label'] ?? 'vector');
