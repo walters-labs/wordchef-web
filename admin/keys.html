@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>API Key Management</title>
+<style>
+  body { font-family: sans-serif; margin: 2rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+  th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+  button { margin-right: 0.5rem; }
+  input[type="text"] { width: 300px; }
+</style>
+</head>
+<body>
+
+<h1>API Key Management</h1>
+
+<label>
+  Admin API Key: 
+  <input type="password" id="adminKeyInput" placeholder="Enter your admin API key" />
+</label>
+<button id="loadKeysBtn">Load Keys</button>
+
+<div id="message" style="margin-top: 1rem; color: red;"></div>
+
+<h2>Create New Key</h2>
+<form id="createKeyForm">
+  <label>
+    Description: 
+    <input type="text" id="descInput" required />
+  </label>
+  <label>
+    Admin? 
+    <input type="checkbox" id="adminCheckbox" />
+  </label>
+  <button type="submit">Create Key</button>
+</form>
+
+<h2>Existing Keys</h2>
+<table id="keysTable" style="display:none;">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Key Prefix</th>
+      <th>Description</th>
+      <th>Active</th>
+      <th>Admin</th>
+      <th>Created At</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  const adminKeyInput = document.getElementById('adminKeyInput');
+  const loadKeysBtn = document.getElementById('loadKeysBtn');
+  const messageDiv = document.getElementById('message');
+  const keysTable = document.getElementById('keysTable');
+  const keysTableBody = keysTable.querySelector('tbody');
+  const createKeyForm = document.getElementById('createKeyForm');
+  const descInput = document.getElementById('descInput');
+  const adminCheckbox = document.getElementById('adminCheckbox');
+
+  // Helper: show message
+  function showMessage(msg, isError = true) {
+    messageDiv.textContent = msg;
+    messageDiv.style.color = isError ? 'red' : 'green';
+  }
+
+  // Fetch and display keys
+  async function loadKeys() {
+    const key = adminKeyInput.value.trim();
+    if (!key) {
+      showMessage('Please enter admin API key.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/keys.php', {
+        headers: { 'X-API-Key': key }
+      });
+      if (!res.ok) throw new Error('Failed to load keys: ' + res.status);
+      const keys = await res.json();
+      renderKeys(keys);
+      showMessage('', false);
+      keysTable.style.display = 'table';
+    } catch (err) {
+      showMessage(err.message);
+      keysTable.style.display = 'none';
+    }
+  }
+
+  // Render keys in table
+  function renderKeys(keys) {
+    keysTableBody.innerHTML = '';
+    keys.forEach(k => {
+      const tr = document.createElement('tr');
+
+      tr.innerHTML = `
+        <td>${k.id}</td>
+        <td>${k.key_prefix}</td>
+        <td>${k.description}</td>
+        <td><input type="checkbox" class="activeCheckbox" data-id="${k.id}" ${k.active === 't' ? 'checked' : ''}></td>
+        <td>${k.admin === 't' ? 'Yes' : 'No'}</td>
+        <td>${k.created_at}</td>
+        <td>
+          <button class="deleteBtn" data-id="${k.id}">Delete</button>
+        </td>
+      `;
+
+      keysTableBody.appendChild(tr);
+    });
+  }
+
+  // Create new key
+  createKeyForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const key = adminKeyInput.value.trim();
+    if (!key) {
+      showMessage('Please enter admin API key.');
+      return;
+    }
+    const description = descInput.value.trim();
+    const isAdmin = adminCheckbox.checked;
+
+    try {
+      const res = await fetch('/api/keys.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': key
+        },
+        body: JSON.stringify({ description, admin: isAdmin })
+      });
+      if (!res.ok) throw new Error('Failed to create key: ' + res.status);
+      const newKey = await res.json();
+      showMessage(`Created key ID ${newKey.id} with prefix ${newKey.key_prefix || newKey.api_key.slice(0,12) + '…'}`, false);
+      descInput.value = '';
+      adminCheckbox.checked = false;
+      loadKeys();
+    } catch (err) {
+      showMessage(err.message);
+    }
+  });
+
+  // Delegate activate/deactivate and delete button clicks
+  keysTableBody.addEventListener('change', async e => {
+    if (e.target.classList.contains('activeCheckbox')) {
+      const key = adminKeyInput.value.trim();
+      if (!key) {
+        showMessage('Please enter admin API key.');
+        return;
+      }
+      const id = e.target.dataset.id;
+      const active = e.target.checked;
+      try {
+        const res = await fetch('/api/keys.php', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': key
+          },
+          body: JSON.stringify({ id: Number(id), active })
+        });
+        if (!res.ok) throw new Error('Failed to update key status: ' + res.status);
+        showMessage('Key status updated', false);
+      } catch (err) {
+        showMessage(err.message);
+        e.target.checked = !active; // revert checkbox if error
+      }
+    }
+  });
+
+  keysTableBody.addEventListener('click', async e => {
+    if (e.target.classList.contains('deleteBtn')) {
+      const key = adminKeyInput.value.trim();
+      if (!key) {
+        showMessage('Please enter admin API key.');
+        return;
+      }
+      if (!confirm('Delete this key? This action cannot be undone.')) return;
+      const id = e.target.dataset.id;
+      try {
+        const res = await fetch('/api/keys.php', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': key
+          },
+          body: JSON.stringify({ id: Number(id) })
+        });
+        if (!res.ok) throw new Error('Failed to delete key: ' + res.status);
+        showMessage('Key deleted', false);
+        loadKeys();
+      } catch (err) {
+        showMessage(err.message);
+      }
+    }
+  });
+
+  // Load keys on button click
+  loadKeysBtn.addEventListener('click', loadKeys);
+</script>
+
+</body>
+</html>
