@@ -58,19 +58,24 @@ function average_embeddings($embeddings) {
 }
 
 function generate_vector_image_base64(array $vector, string $label): ?string {
-    $temp_vector = tempnam(sys_get_temp_dir(), 'vec');
-    file_put_contents($temp_vector, implode(',', $vector));
+    $embedding_csv = implode(',', $vector);
 
-    $cmd = escapeshellcmd("python3 /var/www/wordchef.app/html/scripts/generate_image.py " . escapeshellarg($temp_vector) . " " . escapeshellarg($label));
+    // Adjust this path if needed
+    $python_venv = '/home/jackson/wordchef/wordchefenv/bin/python3';
+    $img_gen_script = '/var/www/wordchef.app/html/scripts/generate_image.py';
+
+    $cmd = escapeshellcmd($python_venv) . ' ' . escapeshellarg($img_gen_script) . ' '
+         . escapeshellarg($embedding_csv) . ' '
+         . escapeshellarg($label)
+         . ' 2>&1'; // capture stderr for debugging
+
     $output = shell_exec($cmd);
 
-    // Expect Python to print a base64 string directly (stdout)
     $base64 = trim($output);
-
-    unlink($temp_vector);
 
     return $base64 !== '' ? $base64 : null;
 }
+
 
 function validate_api_key($conn) {
     // Try to get API key from 'X-API-Key' header (via $_SERVER), or fallback to GET param
