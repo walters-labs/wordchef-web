@@ -5,6 +5,14 @@ require_once('response.php');
 $conn = db_connect();
 validate_api_key($conn);
 
+$limit = intval($_GET['limit'] ?? ($_POST['limit'] ?? 5));
+if ($limit < 1) {
+    $limit = 5;
+}
+if ($limit > 20) {  // enforce max limit
+    $limit = 20;
+}
+
 // Parse input: either GET or POST
 $input = $_GET['words'] ?? ($_POST['words'] ?? '');
 if ($input === '') {
@@ -28,7 +36,7 @@ $average = average_embeddings($input_embeddings);
 $average_str = '[' . implode(',', $average) . ']';
 
 // Query nearest neighbors (words + distances + embeddings)
-$query = "SELECT word, embedding, embedding <-> $1 AS distance FROM wordembeddings ORDER BY embedding <-> $1 LIMIT 5";
+$query = "SELECT word, embedding, embedding <-> $1 AS distance FROM wordembeddings ORDER BY embedding <-> $1 LIMIT $limit";
 $result = pg_query_params($conn, $query, [$average_str]);
 
 $neighbors = [];
