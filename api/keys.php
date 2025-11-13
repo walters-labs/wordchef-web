@@ -47,8 +47,8 @@ $method = $_SERVER['REQUEST_METHOD'];
 // --- Handle HTTP methods ---
 switch ($method) {
     case 'GET':
-        // List all keys (hide full api_key, show only prefix)
-        $result = pg_query($conn, "SELECT id, LEFT(api_key, 12) || '…' AS key_prefix, description, active, admin, created_at FROM api_keys ORDER BY created_at DESC");
+        // List all keys, include full api_key (for admin use), key_prefix, and rate_limit
+        $result = pg_query($conn, "SELECT id, api_key, LEFT(api_key, 12) || '…' AS key_prefix, description, active, admin, created_at, rate_limit FROM api_keys ORDER BY created_at DESC");
         $keys = [];
         while ($row = pg_fetch_assoc($result)) {
             $keys[] = $row;
@@ -63,7 +63,7 @@ switch ($method) {
 
         $key = bin2hex(random_bytes(32));
 
-        $query = "INSERT INTO api_keys (api_key, description, active, admin) VALUES ($1, $2, TRUE, $3) RETURNING id, api_key, description, active, admin, created_at";
+        $query = "INSERT INTO api_keys (api_key, description, active, admin) VALUES ($1, $2, TRUE, $3) RETURNING id, api_key, description, active, admin, created_at, rate_limit";
         $result = pg_query_params($conn, $query, [$key, $desc, $is_admin]);
         if (!$result) {
             $error = pg_last_error($conn);
@@ -80,15 +80,30 @@ switch ($method) {
         $data = get_json_input();
         $id = $data['id'] ?? null;
         $active = isset($data['active']) ? ($data['active'] ? 1 : 0) : null;
+        $rate_limit = isset($data['rate_limit']) ? (int)$data['rate_limit'] : null;
 
-        if (!$id || !is_int($id) || !is_int($active)) {
+        if (!$id || !is_int($id)) {
             http_response_code(400);
-            echo json_encode(['error' => 'Missing or invalid parameters']);
+            echo json_encode(['error' => 'Missing or invalid id parameter']);
+            exit;
+        }
+        if ($active === null && $rate_limit === null) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Nothing to update']);
             exit;
         }
 
-        $query = "UPDATE api_keys SET active = $1 WHERE id = $2 RETURNING id, description, active, admin, created_at";
-        $result = pg_query_params($conn, $query, [$active, $id]);
+        if ($active !== null && $rate_limit !== null) {
+            $query = "UPDATE api_keys SET active = $1, rate_limit = $3 WHERE id = $2 RETURNING id, description, active, admin, created_at, rate_limit";
+            $result = pg_query_params($conn, $query, [$active, $id, $rate_limit]);
+        } else if ($active !== null) {
+            $query = "UPDATE api_keys SET active = $1 WHERE id = $2 RETURNING id, description, active, admin, created_at, rate_limit";
+            $result = pg_query_params($conn, $query, [$active, $id]);
+        } else { // only rate_limit to update
+            $query = "UPDATE api_keys SET rate_limit = $1 WHERE id = $2 RETURNING id, description, active, admin, created_at, rate_limit";
+            $result = pg_query_params($conn, $query, [$rate_limit, $id]);
+        }
+
         if (!$result || pg_num_rows($result) === 0) {
             http_response_code(404);
             echo json_encode(['error' => 'API key not found']);

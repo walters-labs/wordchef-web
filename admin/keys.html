@@ -7,9 +7,30 @@
 <style>
   body { font-family: sans-serif; margin: 2rem; }
   table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-  th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+  th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; vertical-align: middle; }
   button { margin-right: 0.5rem; }
-  input[type="text"] { width: 300px; }
+  input[type="text"], input[type="password"] { width: 300px; }
+  /* monospace font for keys */
+  .key-text {
+    font-family: monospace;
+    white-space: nowrap;
+  }
+  .pointer {
+    cursor: pointer;
+    color: #0066cc;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 1em;
+  }
+  .pointer:hover {
+    color: #004999;
+  }
+  #message {
+    margin-top: 1rem;
+    color: red;
+  }
 </style>
 </head>
 <body>
@@ -22,7 +43,7 @@
 </label>
 <button id="loadKeysBtn">Load Keys</button>
 
-<div id="message" style="margin-top: 1rem; color: red;"></div>
+<div id="message"></div>
 
 <h2>Create New Key</h2>
 <form id="createKeyForm">
@@ -42,8 +63,9 @@
   <thead>
     <tr>
       <th>ID</th>
-      <th>Key Prefix</th>
+      <th>Key</th>
       <th>Description</th>
+      <th>Rate Limit</th>
       <th>Active</th>
       <th>Admin</th>
       <th>Created At</th>
@@ -97,20 +119,68 @@
     keys.forEach(k => {
       const tr = document.createElement('tr');
 
-      tr.innerHTML = `
-        <td>${k.id}</td>
-        <td>${k.key_prefix}</td>
-        <td>${k.description}</td>
-        <td><input type="checkbox" class="activeCheckbox" data-id="${k.id}" ${k.active === 't' ? 'checked' : ''}></td>
-        <td>${k.admin === 't' ? 'Yes' : 'No'}</td>
-        <td>${k.created_at}</td>
-        <td>
-          <button class="deleteBtn" data-id="${k.id}">Delete</button>
-        </td>
-      `;
+      // Key cell with prefix and toggle for full key
+      const keyCell = document.createElement('td');
+      keyCell.classList.add('key-text');
+
+      const prefixSpan = document.createElement('span');
+      prefixSpan.textContent = k.key_prefix;
+      keyCell.appendChild(prefixSpan);
+
+      // Full key span, hidden by default
+      const fullKeySpan = document.createElement('span');
+      fullKeySpan.textContent = k.api_key || '';
+      fullKeySpan.style.display = 'none';
+      keyCell.appendChild(fullKeySpan);
+
+      // Toggle button
+      const toggleBtn = document.createElement('button');
+      toggleBtn.textContent = 'Show key';
+      toggleBtn.className = 'pointer';
+      toggleBtn.style.marginLeft = '0.5rem';
+      toggleBtn.addEventListener('click', () => {
+        const isFullVisible = fullKeySpan.style.display === 'inline';
+        if (isFullVisible) {
+          fullKeySpan.style.display = 'none';
+          prefixSpan.style.display = 'inline';
+          toggleBtn.textContent = 'Show key';
+        } else {
+          fullKeySpan.style.display = 'inline';
+          prefixSpan.style.display = 'none';
+          toggleBtn.textContent = 'Hide key';
+        }
+      });
+      keyCell.appendChild(toggleBtn);
+
+      // Build the row
+      tr.appendChild(document.createElement('td')).textContent = k.id;
+      tr.appendChild(keyCell);
+      tr.appendChild(document.createElement('td')).textContent = k.description;
+      tr.appendChild(document.createElement('td')).textContent = k.rate_limit;
+      tr.appendChild(document.createElement('td')).appendChild(createCheckbox(k.active === 't'));
+      tr.lastChild.firstChild.dataset.id = k.id;
+      tr.appendChild(document.createElement('td')).textContent = k.admin === 't' ? 'Yes' : 'No';
+      tr.appendChild(document.createElement('td')).textContent = k.created_at;
+
+      // Actions cell (Delete button)
+      const actionsCell = document.createElement('td');
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.dataset.id = k.id;
+      deleteBtn.className = 'deleteBtn';
+      actionsCell.appendChild(deleteBtn);
+      tr.appendChild(actionsCell);
 
       keysTableBody.appendChild(tr);
     });
+  }
+
+  function createCheckbox(checked) {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = checked;
+    checkbox.className = 'activeCheckbox';
+    return checkbox;
   }
 
   // Create new key
@@ -144,7 +214,7 @@
     }
   });
 
-  // Delegate activate/deactivate and delete button clicks
+  // Delegate activate/deactivate
   keysTableBody.addEventListener('change', async e => {
     if (e.target.classList.contains('activeCheckbox')) {
       const key = adminKeyInput.value.trim();
@@ -172,6 +242,7 @@
     }
   });
 
+  // Delegate delete button clicks
   keysTableBody.addEventListener('click', async e => {
     if (e.target.classList.contains('deleteBtn')) {
       const key = adminKeyInput.value.trim();
@@ -199,7 +270,6 @@
     }
   });
 
-  // Load keys on button click
   loadKeysBtn.addEventListener('click', loadKeys);
 </script>
 
