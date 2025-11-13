@@ -151,6 +151,4 @@ function check_rate_limit($conn, string $api_key, int $limit) {
     return true;
 }
 
-
-
 ?>
