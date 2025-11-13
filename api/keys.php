@@ -47,8 +47,8 @@ $method = $_SERVER['REQUEST_METHOD'];
 // --- Handle HTTP methods ---
 switch ($method) {
     case 'GET':
-        // List all keys (hide full api_key, show only prefix), include rate_limit
-        $result = pg_query($conn, "SELECT id, LEFT(api_key, 12) || '…' AS key_prefix, description, active, admin, created_at, rate_limit FROM api_keys ORDER BY created_at DESC");
+        // List all keys, include full api_key (for admin use), key_prefix, and rate_limit
+        $result = pg_query($conn, "SELECT id, api_key, LEFT(api_key, 12) || '…' AS key_prefix, description, active, admin, created_at, rate_limit FROM api_keys ORDER BY created_at DESC");
         $keys = [];
         while ($row = pg_fetch_assoc($result)) {
             $keys[] = $row;
