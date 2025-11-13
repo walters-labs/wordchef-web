@@ -77,8 +77,8 @@ function generate_vector_image_base64(array $vector, string $label): ?string {
 }
 
 
-function validate_api_key($conn) {
-    // Try to get API key from 'X-API-Key' header (via $_SERVER), or fallback to GET param
+// Validate the API key exists and is active; return the key string if valid
+function validate_api_key($conn): string {
     if (!empty($_SERVER['HTTP_X_API_KEY'])) {
         $api_key = $_SERVER['HTTP_X_API_KEY'];
     } else if (isset($_GET['api_key'])) {
@@ -89,7 +89,6 @@ function validate_api_key($conn) {
         exit;
     }
 
-    // Now validate against database
     $query = "SELECT 1 FROM api_keys WHERE api_key = $1 AND active = TRUE";
     $result = pg_query_params($conn, $query, [$api_key]);
 
@@ -98,7 +97,60 @@ function validate_api_key($conn) {
         echo json_encode(['error' => 'Invalid API key']);
         exit;
     }
+
+    return $api_key;
 }
+
+// Fetch the rate limit value for a given API key (e.g., requests per minute)
+function fetch_rate_limit($conn, string $api_key): int {
+    $query = "SELECT rate_limit FROM api_keys WHERE api_key = $1";
+    $result = pg_query_params($conn, $query, [$api_key]);
+
+    if (!$result || pg_num_rows($result) === 0) {
+        // Could happen if key was disabled between calls
+        http_response_code(403);
+        echo json_encode(['error' => 'API key not found']);
+        exit;
+    }
+
+    $row = pg_fetch_assoc($result);
+    return (int)$row['rate_limit'];
+}
+
+// Check and increment usage for rate limiting; returns true if allowed, else exits with 429
+function check_rate_limit($conn, string $api_key, int $limit) {
+    // Use current time rounded to the minute (or second if you want)
+    $time_window = date('Y-m-d H:i:00');
+
+    // Upsert usage count atomically
+    $query = "
+        INSERT INTO api_key_usage (api_key, time_window, count)
+        VALUES ($1, $2, 1)
+        ON CONFLICT (api_key, time_window)
+        DO UPDATE SET count = api_key_usage.count + 1
+        RETURNING count;
+    ";
+    $result = pg_query_params($conn, $query, [$api_key, $time_window]);
+
+    if (!$result) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Failed to update rate limit']);
+        exit;
+    }
+
+    $row = pg_fetch_assoc($result);
+    $current_count = (int)$row['count'];
+
+    if ($current_count > $limit) {
+        http_response_code(429);
+        echo json_encode(['error' => 'Rate limit exceeded']);
+        exit;
+    }
+
+    // Allowed
+    return true;
+}
+
 
 
 ?>

@@ -1,9 +1,16 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
 require_once('utils.php');
 require_once('response.php');
 
 $conn = db_connect();
-validate_api_key($conn);
+$api_key = validate_api_key($conn);
+error_log("api_key validated: $api_key");
+$api_rate_limit = fetch_rate_limit($conn, $api_key);
+error_log("fetched_rate_limit: $api_rate_limit");
+check_rate_limit($conn, $api_key, $api_rate_limit);
+error_log("checked_rate_limit passed");
 
 $limit = intval($_GET['limit'] ?? ($_POST['limit'] ?? 5));
 if ($limit < 1) {
