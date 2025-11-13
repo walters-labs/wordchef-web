@@ -47,6 +47,7 @@
       <th>Active</th>
       <th>Admin</th>
       <th>Created At</th>
+      <th>Rate Limit</th>
       <th>Actions</th>
     </tr>
   </thead>
@@ -104,6 +105,7 @@
         <td><input type="checkbox" class="activeCheckbox" data-id="${k.id}" ${k.active === 't' ? 'checked' : ''}></td>
         <td>${k.admin === 't' ? 'Yes' : 'No'}</td>
         <td>${k.created_at}</td>
+        <td>${k.rate_limit !== undefined ? k.rate_limit : 'N/A'}</td>
         <td>
           <button class="deleteBtn" data-id="${k.id}">Delete</button>
         </td>
