@@ -1,9 +1,13 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
 require_once('utils.php');
 require_once('response.php');
 
 $conn = db_connect();
-validate_api_key($conn);
+$api_key = validate_api_key($conn);
+$api_rate_limit = fetch_rate_limit($conn, $api_key);
+check_rate_limit($conn, $api_key, $api_rate_limit);
 
 $word = $_GET['word'] ?? '';
 
